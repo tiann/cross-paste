@@ -6,21 +6,21 @@ import time
 import sys
 import Queue
 
-_PORT = 7890
+_PORT = 9990
 _SCAN_RANGE = range(2, 255)
 
 class Server(object):
     """docstring for Server"""
     def __init__(self):
         super(Server, self).__init__()
-        self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._host = "0.0.0.0"
+        
         
     def __call__(self):
         # listen broadcast
-        threading.Thread(target=self.recv_broadcast).start()
-
         # start server
+        threading.Thread(target=self.recv_broadcast).start()
+        self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._host = "0.0.0.0"
         self.socket_server.bind((self._host, _PORT))
         self.socket_server.listen(5)
         while True:
@@ -36,6 +36,7 @@ class Server(object):
     def recv_broadcast(self):
         addr = ('', _PORT)
         broadcast_server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        broadcast_server.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST,1)
         broadcast_server.bind(addr)
         while True:
             data, addr = broadcast_server.recvfrom(1024)
@@ -49,13 +50,15 @@ class Client(object):
     def __init__(self):
         super(Client, self).__init__()
         self.last_clipboard_txt = pyperclip.paste()
-        self.avaliable_hosts = Queue.Queue()
         
     def __call__(self):
         # broadcast me
         self.broadcast_me()
         self.socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket_client.connect(("172.18.187.12", _PORT))        
+        result = self.socket_client.connect_ex(("172.18.187.12", _PORT))        
+        if not result:
+            print "connect failed."
+            return
         # listen clipboard change
         while True:
             txt = pyperclip.paste()
@@ -66,9 +69,12 @@ class Client(object):
             time.sleep(1)
 
     def broadcast_me(self):
-        addr = (("255.255.255.255", _PORT))
+        addr = (("<broadcast>", _PORT))
         broadcast_client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        broadcast_client.sendto("cross-paste", addr)
+        broadcast_client.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST,1)
+        while True:
+            broadcast_client.sendto("cross-paste", addr)
+            time.sleep(5)
         broadcast_client.close()
 
 if __name__ == '__main__':
