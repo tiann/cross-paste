@@ -22,11 +22,11 @@ class Server(object):
             conn, address = self.socket_server.accept()
             print address, "connected."
             txt = conn.recv(1024)
-            if not txt:
+            if txt:
                 self.txt = txt.strip()
+                pyperclip.copy(self.txt)
             else:
                 print "txt is empty."
-            pyperclip.copy(self.txt)
 
 
 class Client(object):
@@ -41,12 +41,12 @@ class Client(object):
         # listen clipboard change
         while True:
             txt = pyperclip.paste()
-            if txt != self.last_clipboard_txt:
-                print "clipboard changed: %s -> %s" % self.last_clipboard_txt, txt
+            if txt and txt != self.last_clipboard_txt:
+                print "clipboard changed: %s -> %s" % (self.last_clipboard_txt, txt)
                 self.last_clipboard_txt = txt
-                self.socket_client.send(txt)
-                time.sleep(1)
+                self.socket_client.send(self.last_clipboard_txt)
+            time.sleep(1)
 
 if __name__ == '__main__':
-    multiprocessing.Process(target=Server()).start()
-    multiprocessing.Process(target=Client()).start()
+    # threading.Thread(target=Server()).start()
+    threading.Thread(target=Client()).start()
