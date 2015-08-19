@@ -48,6 +48,7 @@ class Client(object):
         print self.control_point.devices
         while len(self.control_point.devices) == 0:
             print "no device found."
+            time.sleep(2)
             self.control_point.search_devices()
 
         default_address = list(self.control_point.devices)[0]
