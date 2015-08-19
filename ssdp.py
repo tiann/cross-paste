@@ -194,9 +194,10 @@ class ControlPoint(object):
                 if firstColon is not -1:
                     header[line[:firstColon]] = line[firstColon + 2:]
             print header
-            if header['USN'] != "uuid:%s" % GUID:
-                print "found device:", address
-                self.devices.append(address)
+            print address
+            # if header['USN'] != "uuid:%s" % GUID:
+            #     print "found device:", address
+            #     self.devices.append(address)
 
     def uninstall(self):
         self.uninstalled = True
