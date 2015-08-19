@@ -1,122 +1,87 @@
-#! /usr/bin/env python
+
 import uuid
 import sys
 import socket
 import time
 import struct
 
-from threading import Thread, RLock
+from threading import Thread
 
 SSDP_ADDR = "239.255.255.250"
 SSDP_PORT = 1900
 
-# SSDP protocol's header, see http://tools.ietf.org/html/draft-cai-ssdp-v1-03
-SEARCH_HEADER = "M-SEARCH * HTTP/1.1"
-NOTIFY_HEADER = "NOTIFY * HTTP/1.1"
-BYE_HEADER = ""
-OK_HEADER = "HTTP/1.1 200 OK"
-
-# search target; use cross-paste to indentify us.
-_ST = "urn:schemes-upnp-org:device:CROSS-PASTE:1.0"
-
-GUID_FILE = "guid"
-
-GUID = str(uuid.uuid1())
-
-def _build_msg(header, pair):
-    '''build ssdp protocol msg, pair must be a key-value pair'''
-    header += "\r\n"
-    for k, v in pair.iteritems():
-        header += "%s: %s\r\n" % (k, v)
-    return header
-
-# def _generate_guid():
-#     import os
-#     global GUID
-#     if os.path.exists(GUID_FILE):
-#         # guid file exist
-#         with open(GUID_FILE) as f:
-#             guid = f.readline()
-#             if guid:
-#                 GUID = guid
-#             print "guid:", GUID
-#     else:
-#         with open(GUID_FILE, "w") as f:
-#             f.write(GUID)
-
-class Device(object):
+class Client(object):
     """ssdp client. send notify msg when add. deal search all msg when requested"""
     def __init__(self):
-        super(Device, self).__init__()
-        self.uninstalled = False
-        self._build_notify_msg()
-        self._build_bye_msg()
-        self._build_ok_msg()
-        
-        self._start_server()
+        super(Client, self).__init__()
+        self.uuid = str(uuid.uuid1())
+        self.header_nt = "urn:schemes-upnp-org:device:Basic:1.0"
+        self._build_notify_header()
+        self._build_ok_header()
 
-    def _start_server(self):
-        """deal the search request!"""
-        self.control_thread = Thread(target=self.__server_loop)
-        self.control_thread.start()
+        self._start()
 
-    def heart_beating(self):
-        """announce the presentense of ourselves"""
+    def _start(self):
         heart_thread = Thread(target=self.__heart_loop)
         heart_thread.setDaemon(True)
-        heart_thread.start()
+        # heart_thread.start()
 
-    def _build_notify_msg(self):
+        control_thread = Thread(target=self.__server_loop)
+        control_thread.setDaemon(True)
+        control_thread.start()
+
+    def _build_notify_header(self):
         headers = {}
         headers['HOST'] = "%s:%d" % (SSDP_ADDR, SSDP_PORT)
         headers['CACHE-CONTROL'] = "max-age=1800"
         headers['LOCATION'] = ""
-        headers['NT'] = _ST
+        headers['NT'] = self.header_nt
         headers['NTS'] = "ssdp:alive"
         headers['SERVER'] = "python/" + str(sys.version_info.major) + "." + str(sys.version_info.minor) + " UPnP/1.0 product/version"  # We should give an actual product and version
-        headers['USN'] = "uuid:" + GUID
+        headers['USN'] = "uuid:" + self.uuid
 
-        self.notify_header = _build_msg(NOTIFY_HEADER, headers)
+        header_str = "NOTIFY * HTTP/1.1\r\n"
+        for k, v in headers.iteritems():
+            header_str += k + ": " + v + "\r\n"
+            header_str += "\r\n"
+        self.notify_header = header_str
 
-    def _build_bye_msg(self):
-        headers = {}
-        headers['HOST'] = "%s:%d" % (SSDP_ADDR, SSDP_PORT)
-        headers['CACHE-CONTROL'] = "max-age=1800"
-        headers['LOCATION'] = ""
-        headers['NT'] = _ST
-        headers['NTS'] = "ssdp:byebye"
-        headers['SERVER'] = "python/" + str(sys.version_info.major) + "." + str(sys.version_info.minor) + " UPnP/1.0 product/version"  # We should give an actual product and version
-        headers['USN'] = "uuid:" + GUID
-
-        self.bye_msg = _build_msg(NOTIFY_HEADER, headers)
-
-    def _build_ok_msg(self):
+    def _build_ok_header(self):
         headers = {}
         headers['DATE'] = time.time()
         headers['CACHE-CONTROL'] = "max-age=1800"
         headers['LOCATION'] = ""
-        headers['ST'] = _ST
+        headers['ST'] = 'ssdp:all'
         headers['SERVER'] = "python/" + str(sys.version_info.major) + "." + str(sys.version_info.minor) + " UPnP/1.0 product/version"  # We should give an actual product and version
-        headers['USN'] = "uuid:" + GUID
+        headers['USN'] = "uuid:" + self.uuid
 
-        self.ok_msg = _build_msg(OK_HEADER, headers)
+        header_str = "HTTP/1.1 200 OK\r\n"
+        for k, v in headers.iteritems():
+            header_str += "%s: %s\r\n" % (k, v)
+            header_str += "\r\n"
+        self.ok_header = header_str
 
     def __server_loop(self):
-        print "server loop..."
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if hasattr(socket, 'SO_REUSEPORT'):
-            sock.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT"), 1)
-        sock.bind(('', SSDP_PORT))
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        self.socket.bind(('', SSDP_PORT))
         mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         while True:
-            read = sock.recv(1024)
+            read = self.socket.recv(1024)
             # parse header
             if not read:
+                print "recv none."
                 continue
+
             lines = read.splitlines()
-            if not lines[0].startswith(SEARCH_HEADER):
+            if len(lines) == 0 or len(lines[0]) < 8:
+                print "lines is not proper"
+                continue
+
+            if not lines[0].startswith("M-SEARCH"):
                 continue
 
             header = {}
@@ -126,44 +91,45 @@ class Device(object):
                     header[line[:firstColon]] = line[firstColon + 2:]
 
             st = header['ST']
-            if st != _ST:
+            print "st:", st
+            if st != 'ssdp:all':
+                print "only support all search now."
                 continue
-            sock.sendto(self.ok_msg, (SSDP_ADDR, SSDP_PORT))
+            self.socket.sendto(self.ok_header, (SSDP_ADDR, SSDP_PORT))
+
+
 
     def __heart_loop(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # sock.bind((IFACE, SSDP_PORT))
         while True:
             sock.sendto(self.notify_header, (SSDP_ADDR, SSDP_PORT))
             time.sleep(5)
-
-    def uninstall(self):
-        self.uninstalled = True
-        # todo:send byebye msg.
 
 class ControlPoint(object):
     """docstring for ControlPoint"""
     def __init__(self):
         super(ControlPoint, self).__init__()
-        self._build_search_msg()
-        self.uninstalled = False
-        self.devices = set()
-        self.lock = RLock()
-
+        self._build_search_hearder()
+        self.devices = []
         self._start()
-        
+
     def _start(self):
         server_thread = Thread(target=self.__server_loop)
+        server_thread.setDaemon(True)
         server_thread.start()
 
-    def _build_search_msg(self):
+    def _build_search_hearder(self):
         headers = {}
         headers['HOST'] = "%s:%d" % (SSDP_ADDR, SSDP_PORT)
         headers['MAN'] = "ssdp:discover"
         headers['MX'] = 1
-        headers['ST'] = _ST
+        headers['ST'] = "ssdp:all"
 
-        self.search_header = _build_msg(SEARCH_HEADER, headers)
+        header_str = "M-SEARCH * HTTP/1.1\r\n"
+        for k, v in headers.iteritems():
+            header_str += "%s: %s\r\n" % (k, v)
+            header_str += "\r\n"
+        self.search_header = header_str
 
     def search_devices(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -173,19 +139,24 @@ class ControlPoint(object):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if hasattr(socket, 'SO_REUSEPORT'):
-            self.socket.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT"), 1)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.socket.bind(('', SSDP_PORT))
         mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
         self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
-        while not self.uninstalled:
-            read, address = self.socket.recvfrom(1024)
+        while True:
+            read = self.socket.recv(1024)
             # parse header
             if not read:
+                print "recv none."
                 continue
 
             lines = read.splitlines()
-            if not lines[0].startswith(OK_HEADER):
+            if len(lines) == 0 or len(lines[0]) < 15:
+                print "lines is not proper"
+                continue
+
+            if not lines[0].startswith("HTTP/1.1 200 OK"):
                 continue
 
             header = {}
@@ -193,25 +164,18 @@ class ControlPoint(object):
                 firstColon = line.find(':') 
                 if firstColon is not -1:
                     header[line[:firstColon]] = line[firstColon + 2:]
-            # print address
-            if header['USN'] != "uuid:%s" % GUID:
-                # print "found device:", address
-                self.lock.acquire()
-                self.devices.add(address[0])
-                print "found:", address[0]
-                self.lock.release()
 
-    def uninstall(self):
-        self.uninstalled = True
-
-# _generate_guid()
+            usn = header['USN']
+            print "found device:", usn
+            self.devices.append(usn)
 
 if __name__ == '__main__':
-    c = Device()
+    c = Client()
     p = ControlPoint()
+
     while True:
         p.search_devices()
-        time.sleep(3)
 
+        time.sleep(10)
 
             
