@@ -52,7 +52,8 @@ class Device(object):
         self.uninstalled = False
         self._build_notify_msg()
         self._build_bye_msg()
-
+        self._build_ok_msg()
+        
         self._start_server()
 
     def _start_server(self):
@@ -90,16 +91,16 @@ class Device(object):
 
         self.bye_msg = _build_msg(NOTIFY_HEADER, headers)
 
-    def _build_ok_msg(self, usn):
+    def _build_ok_msg(self):
         headers = {}
         headers['DATE'] = time.time()
         headers['CACHE-CONTROL'] = "max-age=1800"
         headers['LOCATION'] = ""
         headers['ST'] = _ST
         headers['SERVER'] = "python/" + str(sys.version_info.major) + "." + str(sys.version_info.minor) + " UPnP/1.0 product/version"  # We should give an actual product and version
-        headers['USN'] = "uuid:" + usn
+        headers['USN'] = "uuid:" + GUID
 
-        return _build_msg(OK_HEADER, headers)
+        self.ok_msg = _build_msg(OK_HEADER, headers)
 
     def __server_loop(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -129,9 +130,7 @@ class Device(object):
             st = header['ST']
             if st != _ST:
                 continue
-            print header
-            usn = header['USN']
-            self.socket.sendto(self._build_ok_msg(usn), (SSDP_ADDR, SSDP_PORT))
+            self.socket.sendto(self.ok_msg, (SSDP_ADDR, SSDP_PORT))
 
     def __heart_loop(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -194,7 +193,7 @@ class ControlPoint(object):
                 firstColon = line.find(':') 
                 if firstColon is not -1:
                     header[line[:firstColon]] = line[firstColon + 2:]
-            # print header
+            print header
             if header['USN'] != "uuid:%s" % GUID:
                 print "found device:", address
                 self.devices.append(address)
