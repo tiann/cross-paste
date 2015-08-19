@@ -23,7 +23,6 @@ GUID_FILE = "guid"
 
 GUID = str(uuid.uuid1())
 
-print GUID
 def _build_msg(header, pair):
     '''build ssdp protocol msg, pair must be a key-value pair'''
     header += "\r\n"
@@ -130,9 +129,9 @@ class Device(object):
             st = header['ST']
             if st != _ST:
                 continue
-
+            print header
             usn = header['USN']
-            self.socket.sendto(self._build_ok_msg(OK_HEADER, usn), (SSDP_ADDR, SSDP_PORT))
+            self.socket.sendto(self._build_ok_msg(usn), (SSDP_ADDR, SSDP_PORT))
 
     def __heart_loop(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -206,7 +205,7 @@ class ControlPoint(object):
 # _generate_guid()
 
 if __name__ == '__main__':
-    # c = Device()
+    c = Device()
     p = ControlPoint()
     p.search_devices()
 
