@@ -5,7 +5,7 @@ import socket
 import time
 import struct
 
-from threading import Thread
+from threading import Thread, RLock
 
 SSDP_ADDR = "239.255.255.250"
 SSDP_PORT = 1900
@@ -48,7 +48,6 @@ class Device(object):
     """ssdp client. send notify msg when add. deal search all msg when requested"""
     def __init__(self):
         super(Device, self).__init__()
-        self.uuid = str(uuid.uuid1())
         self.uninstalled = False
         self._build_notify_msg()
         self._build_bye_msg()
@@ -149,9 +148,10 @@ class ControlPoint(object):
         super(ControlPoint, self).__init__()
         self._build_search_msg()
         self.uninstalled = False
-        self.devices = []
-        self._start()
+        self.devices = set()
+        self.lock = RLock()
 
+        self._start()
     def _start(self):
         server_thread = Thread(target=self.__server_loop)
         server_thread.start()
@@ -195,8 +195,10 @@ class ControlPoint(object):
                     header[line[:firstColon]] = line[firstColon + 2:]
             # print address
             if header['USN'] != "uuid:%s" % GUID:
-                print "found device:", address
-                self.devices.append(address)
+                # print "found device:", address
+                self.lock.acquire()
+                self.devices.add(address[0])
+                self.lock.release()
 
     def uninstall(self):
         self.uninstalled = True
@@ -206,9 +208,9 @@ class ControlPoint(object):
 if __name__ == '__main__':
     c = Device()
     p = ControlPoint()
-    while True:
-        p.search_devices()
-        time.sleep(3)
+    # while True:
+    p.search_devices()
+    # time.sleep(3)
 
 
             
