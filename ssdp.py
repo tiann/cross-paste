@@ -23,6 +23,7 @@ GUID_FILE = "guid"
 
 GUID = str(uuid.uuid1())
 
+print GUID
 def _build_msg(header, pair):
     '''build ssdp protocol msg, pair must be a key-value pair'''
     header += "\r\n"
@@ -30,19 +31,19 @@ def _build_msg(header, pair):
         header += "%s: %s\r\n" % (k, v)
     return header
 
-def _generate_guid():
-    import os
-    global GUID
-    if os.path.exists(GUID_FILE):
-        # guid file exist
-        with open(GUID_FILE) as f:
-            guid = f.readline()
-            if guid:
-                GUID = guid
-            print "guid:", GUID
-    else:
-        with open(GUID_FILE, "w") as f:
-            f.write(GUID)
+# def _generate_guid():
+#     import os
+#     global GUID
+#     if os.path.exists(GUID_FILE):
+#         # guid file exist
+#         with open(GUID_FILE) as f:
+#             guid = f.readline()
+#             if guid:
+#                 GUID = guid
+#             print "guid:", GUID
+#     else:
+#         with open(GUID_FILE, "w") as f:
+#             f.write(GUID)
 
 class Device(object):
     """ssdp client. send notify msg when add. deal search all msg when requested"""
@@ -51,7 +52,6 @@ class Device(object):
         self.uuid = str(uuid.uuid1())
         self.uninstalled = False
         self._build_notify_msg()
-        self._build_ok_msg()
         self._build_bye_msg()
 
         self._start_server()
@@ -91,16 +91,16 @@ class Device(object):
 
         self.bye_msg = _build_msg(NOTIFY_HEADER, headers)
 
-    def _build_ok_msg(self):
+    def _build_ok_msg(self, usn):
         headers = {}
         headers['DATE'] = time.time()
         headers['CACHE-CONTROL'] = "max-age=1800"
         headers['LOCATION'] = ""
         headers['ST'] = _ST
         headers['SERVER'] = "python/" + str(sys.version_info.major) + "." + str(sys.version_info.minor) + " UPnP/1.0 product/version"  # We should give an actual product and version
-        headers['USN'] = "uuid:" + GUID
+        headers['USN'] = "uuid:" + usn
 
-        self.ok_header = _build_msg(OK_HEADER, headers)
+        return _build_msg(OK_HEADER, headers)
 
     def __server_loop(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -131,7 +131,8 @@ class Device(object):
             if st != _ST:
                 continue
 
-            self.socket.sendto(self.ok_header, (SSDP_ADDR, SSDP_PORT))
+            usn = header['USN']
+            self.socket.sendto(self._build_ok_msg(OK_HEADER, usn), (SSDP_ADDR, SSDP_PORT))
 
     def __heart_loop(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -194,7 +195,7 @@ class ControlPoint(object):
                 firstColon = line.find(':') 
                 if firstColon is not -1:
                     header[line[:firstColon]] = line[firstColon + 2:]
-
+            # print header
             if header['USN'] != "uuid:%s" % GUID:
                 print "found device:", address
                 self.devices.append(address)
@@ -202,7 +203,7 @@ class ControlPoint(object):
     def uninstall(self):
         self.uninstalled = True
 
-_generate_guid()
+# _generate_guid()
 
 if __name__ == '__main__':
     # c = Device()
