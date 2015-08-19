@@ -21,8 +21,7 @@ class Server(object):
         # listen broadcast
         # start server
         self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._host = "0.0.0.0"
-        self.socket_server.bind((self._host, _PORT))
+        self.socket_server.bind(('', _PORT))
         self.socket_server.listen(5)
         while True:
             conn, address = self.socket_server.accept()
@@ -48,13 +47,14 @@ class Client(object):
         print self.control_point.devices
         while len(self.control_point.devices) == 0:
             print "no device found."
-            time.sleep(2)
+            time.sleep(5)
             self.control_point.search_devices()
 
         default_address = list(self.control_point.devices)[0]
+        print "connect to address:", default_address
         self.socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         result = self.socket_client.connect_ex((default_address, _PORT))        
-        if not result:
+        if result:
             print "connect failed."
             return
         # listen clipboard change

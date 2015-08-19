@@ -208,9 +208,9 @@ class ControlPoint(object):
 if __name__ == '__main__':
     c = Device()
     p = ControlPoint()
-    # while True:
-    p.search_devices()
-    # time.sleep(3)
+    while True:
+        p.search_devices()
+        time.sleep(3)
 
 
             
