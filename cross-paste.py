@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 import pyperclip
 import socket
 import threading
@@ -38,13 +40,10 @@ class Client(object):
     def __init__(self):
         super(Client, self).__init__()
         self.last_clipboard_txt = pyperclip.paste()
-        self.control_point = ssdp.ControlPoint()        
+        self.control_point = ssdp.ControlPoint()
 
     def __call__(self):
         # broadcast me
-        self.control_point.search_devices()
-        time.sleep(5)
-        print self.control_point.devices
         while len(self.control_point.devices) == 0:
             print "no device found."
             time.sleep(5)

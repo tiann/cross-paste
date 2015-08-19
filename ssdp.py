@@ -1,4 +1,4 @@
-
+#! /usr/bin/env python
 import uuid
 import sys
 import socket
@@ -102,21 +102,20 @@ class Device(object):
         self.ok_msg = _build_msg(OK_HEADER, headers)
 
     def __server_loop(self):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, 'SO_REUSEPORT'):
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        self.socket.bind(('', SSDP_PORT))
+        print "server loop..."
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # if hasattr(socket, 'SO_REUSEPORT'):
+        #     socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        sock.bind(('', SSDP_PORT))
         mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
-        self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         while True:
-            read, address = self.socket.recvfrom(1024)
+            read = sock.recv(1024)
             # parse header
             if not read:
                 continue
-
             lines = read.splitlines()
-
             if not lines[0].startswith(SEARCH_HEADER):
                 continue
 
@@ -129,7 +128,7 @@ class Device(object):
             st = header['ST']
             if st != _ST:
                 continue
-            self.socket.sendto(self.ok_msg, (SSDP_ADDR, SSDP_PORT))
+            sock.sendto(self.ok_msg, (SSDP_ADDR, SSDP_PORT))
 
     def __heart_loop(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -152,6 +151,7 @@ class ControlPoint(object):
         self.lock = RLock()
 
         self._start()
+        
     def _start(self):
         server_thread = Thread(target=self.__server_loop)
         server_thread.start()
@@ -172,8 +172,8 @@ class ControlPoint(object):
     def __server_loop(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, 'SO_REUSEPORT'):
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        # if hasattr(socket, 'SO_REUSEPORT'):
+        #     self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.socket.bind(('', SSDP_PORT))
         mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
         self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
@@ -198,6 +198,7 @@ class ControlPoint(object):
                 # print "found device:", address
                 self.lock.acquire()
                 self.devices.add(address[0])
+                print "found:", address[0]
                 self.lock.release()
 
     def uninstall(self):
