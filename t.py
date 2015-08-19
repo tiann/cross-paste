@@ -49,8 +49,8 @@ class Client(object):
         while len(self.control_point.devices) == 0:
             print "no device found."
             self.control_point.search_devices()
-            
-        default_address = self.control_point.devices[0]
+
+        default_address = list(self.control_point.devices)[0]
         self.socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         result = self.socket_client.connect_ex((default_address, _PORT))        
         if not result:
