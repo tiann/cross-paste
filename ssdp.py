@@ -57,7 +57,7 @@ class Device(object):
 
     def _start_server(self):
         """deal the search request!"""
-        self.control_thread = Thread(target=self.__server_loop)
+        self.control_thread = Thread(target=self.__process_search_request)
         self.control_thread.start()
 
     def heart_beating(self):
@@ -101,21 +101,19 @@ class Device(object):
 
         self.ok_msg = _build_msg(OK_HEADER, headers)
 
-    def __server_loop(self):
-        print "server loop..."
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    def __process_search_request(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, 'SO_REUSEPORT'):
-            sock.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT"), 1)
+        # if hasattr(socket, 'SO_REUSEPORT'):
+            # sock.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT"), 1)
         sock.bind(('', SSDP_PORT))
-        mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, 
+            socket.inet_aton(SSDP_ADDR) + struct.pack('I', socket.INADDR_ANY))
+
         while True:
-            read = sock.recv(1024)
+            data, addr = sock.recvfrom(0x1000)
             # parse header
-            if not read:
-                continue
-            lines = read.splitlines()
+            lines = data.splitlines()
             if not lines[0].startswith(SEARCH_HEADER):
                 continue
 
@@ -128,7 +126,13 @@ class Device(object):
             st = header['ST']
             if st != _ST:
                 continue
-            sock.sendto(self.ok_msg, (SSDP_ADDR, SSDP_PORT))
+            self.__send_msearch_reply(addr, st)
+
+    def __send_msearch_reply(self, addr, st):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(addr)
+        sock.send(self.ok_msg)
+        sock.close()
 
     def __heart_loop(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -150,10 +154,18 @@ class ControlPoint(object):
         self.devices = set()
         self.lock = RLock()
 
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, 'SO_REUSEPORT'):
+            self.socket.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT"), 1)
+        self.socket.bind(('', SSDP_PORT))
+        mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
+        self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
         self._start()
         
     def _start(self):
-        server_thread = Thread(target=self.__server_loop)
+        server_thread = Thread(target=self.__process_ok_request)
         server_thread.start()
 
     def _build_search_msg(self):
@@ -165,19 +177,11 @@ class ControlPoint(object):
 
         self.search_header = _build_msg(SEARCH_HEADER, headers)
 
-    def search_devices(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(self.search_header, (SSDP_ADDR, SSDP_PORT))
+    def search(self):
+        self.socket.sendto(self.search_header, (SSDP_ADDR, SSDP_PORT))
 
-    def __server_loop(self):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, 'SO_REUSEPORT'):
-            self.socket.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT"), 1)
-        self.socket.bind(('', SSDP_PORT))
-        mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
-        self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-
+    def __process_ok_request(self):
+        
         while not self.uninstalled:
             read, address = self.socket.recvfrom(1024)
             # parse header
@@ -208,9 +212,10 @@ class ControlPoint(object):
 
 if __name__ == '__main__':
     c = Device()
+    # c.heart_beating()
     p = ControlPoint()
     while True:
-        p.search_devices()
+        p.search()
         time.sleep(3)
 
 
