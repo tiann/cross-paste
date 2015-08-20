@@ -30,22 +30,11 @@ def _build_msg(header, pair):
         header += "%s: %s\r\n" % (k, v)
     return header
 
-# def _generate_guid():
-#     import os
-#     global GUID
-#     if os.path.exists(GUID_FILE):
-#         # guid file exist
-#         with open(GUID_FILE) as f:
-#             guid = f.readline()
-#             if guid:
-#                 GUID = guid
-#             print "guid:", GUID
-#     else:
-#         with open(GUID_FILE, "w") as f:
-#             f.write(GUID)
-
 class Device(object):
     """ssdp client. send notify msg when add. deal search all msg when requested"""
+
+    HEART_INTERVAL = 5
+
     def __init__(self):
         super(Device, self).__init__()
         self.uninstalled = False
@@ -54,13 +43,15 @@ class Device(object):
         self._build_ok_msg()
         
         self._start_server()
+        self._heart_beating()
 
     def _start_server(self):
         """deal the search request!"""
         self.control_thread = Thread(target=self.__process_search_request)
+        self.control_thread.setDaemon(True)
         self.control_thread.start()
 
-    def heart_beating(self):
+    def _heart_beating(self):
         """announce the presentense of ourselves"""
         heart_thread = Thread(target=self.__heart_loop)
         heart_thread.setDaemon(True)
@@ -104,13 +95,13 @@ class Device(object):
     def __process_search_request(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        # if hasattr(socket, 'SO_REUSEPORT'):
-            # sock.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT"), 1)
+        if hasattr(socket, 'SO_REUSEPORT'):
+            sock.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT"), 1)
         sock.bind(('', SSDP_PORT))
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, 
-            socket.inet_aton(SSDP_ADDR) + struct.pack('I', socket.INADDR_ANY))
+        mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
-        while True:
+        while not self.uninstalled:
             data, addr = sock.recvfrom(0x1000)
             # parse header
             lines = data.splitlines()
@@ -128,18 +119,21 @@ class Device(object):
                 continue
             self.__send_msearch_reply(addr, st)
 
+        sock.close()
+
     def __send_msearch_reply(self, addr, st):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.connect(addr)
         sock.send(self.ok_msg)
         sock.close()
+        print "reply to", addr
 
     def __heart_loop(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # sock.bind((IFACE, SSDP_PORT))
-        while True:
+        while not self.uninstalled:
             sock.sendto(self.notify_header, (SSDP_ADDR, SSDP_PORT))
-            time.sleep(5)
+            time.sleep(self.HEART_INTERVAL)
 
     def uninstall(self):
         self.uninstalled = True
@@ -161,6 +155,7 @@ class ControlPoint(object):
         self.socket.bind(('', SSDP_PORT))
         mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
         self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, False)
 
         self._start()
         
@@ -202,7 +197,7 @@ class ControlPoint(object):
                 # print "found device:", address
                 self.lock.acquire()
                 self.devices.add(address[0])
-                print "found:", address[0]
+                print "found:", address
                 self.lock.release()
 
     def uninstall(self):
@@ -212,11 +207,9 @@ class ControlPoint(object):
 
 if __name__ == '__main__':
     c = Device()
-    # c.heart_beating()
-    p = ControlPoint()
+    # p = ControlPoint()
     while True:
-        p.search()
-        time.sleep(3)
+        time.sleep(5)
 
 
             
