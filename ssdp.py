@@ -100,14 +100,16 @@ class Device(object):
         sock.bind(('', SSDP_PORT))
         mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        # sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, False)
 
-        while not self.uninstalled:
+        while not self.uninstalled: 
             data, addr = sock.recvfrom(0x1000)
             # parse header
             lines = data.splitlines()
             if not lines[0].startswith(SEARCH_HEADER):
                 continue
 
+            print data, addr
             header = {}
             for line in lines:
                 firstColon = line.find(':') 
@@ -155,7 +157,7 @@ class ControlPoint(object):
         self.socket.bind(('', SSDP_PORT))
         mreq = struct.pack("4sl", socket.inet_aton(SSDP_ADDR), socket.INADDR_ANY)
         self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-        self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, False)
+        # self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, False)
 
         self._start()
         
@@ -197,7 +199,7 @@ class ControlPoint(object):
                 # print "found device:", address
                 self.lock.acquire()
                 self.devices.add(address[0])
-                print "found:", address
+                print "found:", address[0]
                 self.lock.release()
 
     def uninstall(self):
@@ -207,8 +209,9 @@ class ControlPoint(object):
 
 if __name__ == '__main__':
     c = Device()
-    # p = ControlPoint()
+    p = ControlPoint()
     while True:
+        p.search()
         time.sleep(5)
 
 
