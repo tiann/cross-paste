@@ -1,3 +1,4 @@
+#! /usr/bin/env python
 import json
 import base64
 import socket
@@ -69,8 +70,7 @@ class Peer(object):
     def __init__(self, ip, host=None):
         super(Peer, self).__init__()
         self.ip = ip
-        if not host:
-            self.host = ip
+        self.host = host if not host else self.ip
 
     def __repr__(self):
         return "ip=%s, host=%s" % (self.ip, self.host)
@@ -103,7 +103,7 @@ class Client(object):
             header = data.get('header')
             if header and header == PROTOCOL_HEADER:
                 # peer found!!
-                p = Peer(addr[0], socket.gethostbyaddr(addr))
+                p = Peer(addr[0], host=data.get('host'))
                 self.peers.append(p)
 
                 # if no default peer, set it
@@ -156,9 +156,10 @@ class Server(object):
         while True:
             try:
                 for broadcast_addr in ALL_BROADCAST_ADDR:
+                    print "sendto", broadcast_addr
                     s.sendto(msg_str, (broadcast_addr, DISCOVER_PORT))
 
-                time.sleep(10)
+                time.sleep(5)
             except KeyboardInterrupt:
                 self.shutdown = True
                 break
