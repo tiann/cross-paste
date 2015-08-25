@@ -27,7 +27,7 @@ from subprocess import call, Popen, PIPE
 def _pasteWindows():
     CF_UNICODETEXT = 13
     d = ctypes.windll
-    d.user32.OpenClipboard(None)
+    d.user32.OpenClipboard(0)
     handle = d.user32.GetClipboardData(CF_UNICODETEXT)
     data = ctypes.c_wchar_p(handle).value
     d.user32.CloseClipboard()
@@ -44,7 +44,7 @@ def _copyWindows(text):
     except NameError:
         if not isinstance(text, str):
             text = text.decode('mbcs')
-    d.user32.OpenClipboard(None)
+    d.user32.OpenClipboard(0)
     d.user32.EmptyClipboard()
     hCd = d.kernel32.GlobalAlloc(GMEM_DDESHARE, len(text.encode('utf-16-le')) + 2)
     pchData = d.kernel32.GlobalLock(hCd)

@@ -83,7 +83,7 @@ class Client(object):
         self.peers = []
         self.default_peer = None
         
-        self.last_paste_txt = None
+        self.last_paste_txt = pyperclip.paste()
 
     def __peer_discovery_loop(self):
         """
@@ -116,22 +116,23 @@ class Client(object):
 
     def __work_loop(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(('', PORT))
         while True:
             time.sleep(5)
             if not self.default_peer:
                 pprint("default peer is None")
                 continue
-            status = sock.connect_ex((self.default_peer.ip, PORT))
-            if status:
-                pprint("connect failed")
+            try:
+                sock.connect((self.default_peer.ip, PORT))
+            except Exception, e:
+                pprint("connected to %s failed: %s" % (self.default_peer.ip, e))
                 continue
+
             while True:
                 txt = pyperclip.paste()
                 if self.last_paste_txt != txt:
                     pprint("clipboard changed: %s-->%s" % (self.last_paste_txt, txt))
                     self.last_paste_txt = txt
-                    sock.send(txt)
+                    sock.send(txt + '\n')
 
                 time.sleep(1)
 
@@ -147,28 +148,33 @@ class Server(object):
         self.shutdown = False
 
     def start_server(self):
-        print "start server"
         t = threading.Thread(target=self.__server_loop)
-        # t.setDaemon(True)
         t.start()
 
     def __server_loop(self):
         """
         listen to the paste port, comminute with paste client.
         """
+        pprint("server loop")
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)        
         s.bind(('', PORT))
         s.listen(5)
         while not self.shutdown:
             conn, addr = s.accept()
             print addr, "connected."
-            txt = conn.recv(1024)
-            if txt:
-                txt = txt.strip()
-                pyperclip.copy(txt)
-            else: print "txt is empty:", txt
+            threading.Thread(target=self.__deal_request, args=(conn, ))
         s.close()
-        print "shutdown..."
+
+    def __deal_request(self, conn):
+        while True:
+            try:
+                txt = conn.recv(1024)
+                if txt:
+                    txt = txt.strip()
+                    pyperclip.copy(txt)
+                else: print "txt is empty:", txt
+            except:
+                conn.close()
 
     def __broadcast_us(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -179,7 +185,6 @@ class Server(object):
         while True:
             try:
                 for broadcast_addr in ALL_BROADCAST_ADDR:
-                    print "sendto", broadcast_addr
                     s.sendto(msg_str, (broadcast_addr, DISCOVER_PORT))
 
                 time.sleep(5)
@@ -187,19 +192,18 @@ class Server(object):
                 self.shutdown = True
                 break
         s.close()
-        print "shudown"
 
     def __call__(self):
-        self.__broadcast_us()
         self.start_server()
+        self.__broadcast_us()
 
 if __name__ == '__main__':
     # print ALL_BROADCAST_ADDR, ALL_IP_ADDR
     server_process = multiprocessing.Process(target=Server())
     client_process = multiprocessing.Process(target=Client())
-    # server_process.start()
+    server_process.start()
     client_process.start()
 
     client_process.join()
-    # server_process.join()
+    server_process.join()
 
