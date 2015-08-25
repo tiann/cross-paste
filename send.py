@@ -162,18 +162,20 @@ class Server(object):
         while not self.shutdown:
             conn, addr = s.accept()
             print addr, "connected."
-            threading.Thread(target=self.__deal_request, args=(conn, ))
+            threading.Thread(target=self.__deal_request, args=(conn, )).start()
         s.close()
 
     def __deal_request(self, conn):
         while True:
             try:
                 txt = conn.recv(1024)
+                pprint("recv: %s" % txt)
                 if txt:
                     txt = txt.strip()
                     pyperclip.copy(txt)
                 else: print "txt is empty:", txt
-            except:
+            except Exception, e:
+                pprint("deal __deal_request error: %s" % e)
                 conn.close()
 
     def __broadcast_us(self):
