@@ -82,6 +82,8 @@ class Client(object):
         super(Client, self).__init__()
         self.peers = []
         self.default_peer = None
+        
+        self.last_paste_txt = None
 
     def __peer_discovery_loop(self):
         """
@@ -95,10 +97,8 @@ class Client(object):
             raw_data, addr = s.recvfrom(1024)
             if addr[0] in ALL_IP_ADDR:
                 # ourself, ignore
-                pprint("ourselves")
                 continue
 
-            pprint((raw_data, addr))
             data = decode(raw_data)
             header = data.get('header')
             if header and header == PROTOCOL_HEADER:
@@ -111,11 +111,34 @@ class Client(object):
                     self.default_peer = p
                 pprint("peer: %s found." % p)
 
-            time.sleep(10)
+    def set_default_peer(self, p):
+        self.default_peer = p
+
+    def __work_loop(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('', PORT))
+        while True:
+            time.sleep(5)
+            if not self.default_peer:
+                pprint("default peer is None")
+                continue
+            status = sock.connect_ex((self.default_peer.ip, PORT))
+            if status:
+                pprint("connect failed")
+                continue
+            while True:
+                txt = pyperclip.paste()
+                if self.last_paste_txt != txt:
+                    pprint("clipboard changed: %s-->%s" % (self.last_paste_txt, txt))
+                    self.last_paste_txt = txt
+                    sock.send(txt)
+
+                time.sleep(1)
+
 
     def __call__(self):
-        # threading.Thread(target=self.__peer_discovery_loop).start()
-        self.__peer_discovery_loop()
+        threading.Thread(target=self.__peer_discovery_loop).start()
+        self.__work_loop()
 
 class Server(object):
     """docstring for Server"""
@@ -174,9 +197,9 @@ if __name__ == '__main__':
     # print ALL_BROADCAST_ADDR, ALL_IP_ADDR
     server_process = multiprocessing.Process(target=Server())
     client_process = multiprocessing.Process(target=Client())
-    server_process.start()
+    # server_process.start()
     client_process.start()
 
     client_process.join()
-    server_process.join()
+    # server_process.join()
 
