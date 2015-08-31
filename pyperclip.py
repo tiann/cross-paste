@@ -85,14 +85,14 @@ def _copyCygwin(text):
 
 
 def _copyOSX(text):
-    # text = str(text)
+    text = text.encode('utf-8')
     p = Popen(['pbcopy', 'w'], stdin=PIPE)
     try:
         # works on Python 3 (bytes() requires an encoding)
         p.communicate(input=bytes(text, 'utf-8'))
     except TypeError:
         # works on Python 2 (bytes() only takes one argument)
-        p.communicate(input=bytes(text))
+        p.communicate(input=text)
 
 
 def _pasteOSX():
