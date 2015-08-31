@@ -85,7 +85,7 @@ def _copyCygwin(text):
 
 
 def _copyOSX(text):
-    text = str(text)
+    # text = str(text)
     p = Popen(['pbcopy', 'w'], stdin=PIPE)
     try:
         # works on Python 3 (bytes() requires an encoding)
