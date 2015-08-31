@@ -9,6 +9,7 @@ import sys
 
 import netifaces
 import pyperclip
+import logging
 
 _VER = "0.1.0"
 
@@ -32,6 +33,12 @@ encode: base64
 
 ALL_IP_ADDR = set()
 ALL_BROADCAST_ADDR = set()
+
+logging.basicConfig(level=logging.DEBUG,
+    format='%(asctime)s %(filename)s[line:%(lineno)s] %(message)s',
+    datefmt='%a, %d %b %Y %H:%M:%S',
+    filename='cross-paste.log',
+    filemode='w')
 
 def get_all_broadcast_address():
     ifaces = netifaces.interfaces()
@@ -75,6 +82,14 @@ class Peer(object):
     def __repr__(self):
         return "ip=%s, host=%s" % (self.ip, self.host)
         
+    def __eq__(self, other):
+        return self.ip == other.ip
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.ip)
 
 class Client(object):
     """docstring for Server"""
@@ -104,12 +119,15 @@ class Client(object):
             if header and header == PROTOCOL_HEADER:
                 # peer found!!
                 p = Peer(addr[0], host=data.get('host'))
-                self.peers.append(p)
+                if not p in self.peers:
+                    pprint("peer: %s found." % p)
+                    self.peers.append(p)
 
                 # if no default peer, set it
                 if not self.default_peer:
                     self.default_peer = p
-                pprint("peer: %s found." % p)
+
+                
 
     def set_default_peer(self, p):
         self.default_peer = p
@@ -169,8 +187,8 @@ class Server(object):
         while True:
             try:
                 txt = conn.recv(1024)
+                logging.debug("recv: %s" % txt)
                 txt = unicode(txt, "utf-8")
-                pprint("recv: %s" % txt)
                 if txt:
                     txt = txt.strip()
                     pyperclip.copy(txt)
