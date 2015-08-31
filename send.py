@@ -132,7 +132,7 @@ class Client(object):
                 if self.last_paste_txt != txt:
                     pprint("clipboard changed: %s-->%s" % (self.last_paste_txt, txt))
                     self.last_paste_txt = txt
-                    sock.send(txt + '\n')
+                    sock.send(txt.encode('utf-8') + '\n')
 
                 time.sleep(1)
 
@@ -169,14 +169,17 @@ class Server(object):
         while True:
             try:
                 txt = conn.recv(1024)
+                txt = unicode(txt, "utf-8")
                 pprint("recv: %s" % txt)
                 if txt:
                     txt = txt.strip()
                     pyperclip.copy(txt)
-                else: print "txt is empty:", txt
+                else: 
+                    print "txt is empty:", txt
             except Exception, e:
                 pprint("deal __deal_request error: %s" % e)
                 conn.close()
+                break
 
     def __broadcast_us(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
