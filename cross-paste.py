@@ -197,17 +197,21 @@ class Server(object):
         while True:
             try:
                 txt = conn.recv(1024)
+                if not txt:
+                    # Read at most buffer_size bytes from the socket’s remote end-point.
+                    # An empty string implies that the channel has been closed from the other end.
+                    pprint("channel has been closed from the other end.")
+                    break
                 # remove the header
                 txt = txt.replace(PROTOCOL_HEADER, '', 1).strip()
                 logging.debug("recv: %s" % txt)
                 txt = unicode(txt, "utf-8")
                 if txt:
                     pyperclip.copy(txt)
-                else: 
-                    # Read at most buffer_size bytes from the socket’s remote end-point.
-                    # An empty string implies that the channel has been closed from the other end.
-                    pprint("channel has been closed from the other end.")
-                    break
+                else:
+                    # receive header, pass.
+                    pass
+                    
             except Exception, e:
                 traceback.print_exc()
                 pprint("deal __deal_request error: %s" % e)
