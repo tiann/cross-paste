@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# coding=utf-8
 import json
 import base64
 import socket
@@ -6,6 +7,7 @@ import time
 import threading
 import multiprocessing
 import sys
+import traceback
 
 import netifaces
 import pyperclip
@@ -150,8 +152,14 @@ class Client(object):
                 if self.last_paste_txt != txt:
                     pprint("clipboard changed: %s-->%s" % (self.last_paste_txt, txt))
                     self.last_paste_txt = txt
-                    sock.send(txt.encode('utf-8') + '\n')
-
+                    sock.send(PROTOCOL_HEADER + txt.encode('utf-8') + '\n')
+                    continue
+                try:
+                    sock.send(PROTOCOL_HEADER + '\n')
+                except:
+                    pprint('connection closed by peer.')
+                    self.default_peer = None
+                    break
                 time.sleep(1)
 
 
@@ -187,17 +195,23 @@ class Server(object):
         while True:
             try:
                 txt = conn.recv(1024)
+                # remove the header
+                txt.replace(PROTOCOL_HEADER, '', 1)
                 logging.debug("recv: %s" % txt)
                 txt = unicode(txt, "utf-8")
                 if txt:
                     txt = txt.strip()
                     pyperclip.copy(txt)
                 else: 
-                    print "txt is empty:", txt
+                    # Read at most buffer_size bytes from the socket’s remote end-point.
+                    # An empty string implies that the channel has been closed from the other end.
+                    pprint("channel has been closed from the other end.")
+                    break
             except Exception, e:
+                traceback.print_exc()
                 pprint("deal __deal_request error: %s" % e)
-                conn.close()
                 break
+        conn.close()
 
     def __broadcast_us(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
