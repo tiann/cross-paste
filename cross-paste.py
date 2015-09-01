@@ -159,6 +159,7 @@ class Client(object):
                 except:
                     pprint('connection closed by peer.')
                     self.default_peer = None
+                    sock.close()
                     break
                 time.sleep(1)
 
@@ -196,7 +197,7 @@ class Server(object):
             try:
                 txt = conn.recv(1024)
                 # remove the header
-                txt.replace(PROTOCOL_HEADER, '', 1)
+                txt = txt.replace(PROTOCOL_HEADER, '', 1)
                 logging.debug("recv: %s" % txt)
                 txt = unicode(txt, "utf-8")
                 if txt:
