@@ -135,16 +135,17 @@ class Client(object):
         self.default_peer = p
 
     def __work_loop(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         while True:
             time.sleep(5)
             if not self.default_peer:
                 pprint("default peer is None")
                 continue
             try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.connect((self.default_peer.ip, PORT))
             except Exception, e:
                 pprint("connected to %s failed: %s" % (self.default_peer.ip, e))
+                sock.close()
                 continue
 
             while True:
@@ -197,11 +198,10 @@ class Server(object):
             try:
                 txt = conn.recv(1024)
                 # remove the header
-                txt = txt.replace(PROTOCOL_HEADER, '', 1)
+                txt = txt.replace(PROTOCOL_HEADER, '', 1).strip()
                 logging.debug("recv: %s" % txt)
                 txt = unicode(txt, "utf-8")
                 if txt:
-                    txt = txt.strip()
                     pyperclip.copy(txt)
                 else: 
                     # Read at most buffer_size bytes from the socket’s remote end-point.
