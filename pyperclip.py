@@ -18,16 +18,20 @@ On Linux, this module makes use of the xclip or xsel commands, which should come
 The gtk module is not available for Python 3, and this module does not work with PyGObject yet.
 """
 
-__version__ = '1.5.6'
+__version__ = '1.5.11'
 
 import platform, os
 from subprocess import call, Popen, PIPE
 
 
+PY2 = '2' == platform.python_version_tuple()[0]
+text_type = unicode if PY2 else str
+
+
 def _pasteWindows():
     CF_UNICODETEXT = 13
     d = ctypes.windll
-    d.user32.OpenClipboard(0)
+    d.user32.OpenClipboard(0 if PY2 else None)
     handle = d.user32.GetClipboardData(CF_UNICODETEXT)
     data = ctypes.c_wchar_p(handle).value
     d.user32.CloseClipboard()
@@ -37,14 +41,12 @@ def _pasteWindows():
 def _copyWindows(text):
     GMEM_DDESHARE = 0x2000
     CF_UNICODETEXT = 13
-    d = ctypes.windll # cdll expects 4 more bytes in user32.OpenClipboard(None)
-    try:  # Python 2
-        if not isinstance(text, unicode):
-            text = text.decode('mbcs')
-    except NameError:
-        if not isinstance(text, str):
-            text = text.decode('mbcs')
-    d.user32.OpenClipboard(0)
+    d = ctypes.windll # cdll expects 4 more bytes in user32.OpenClipboard(0)
+    if not isinstance(text, text_type):
+        text = text.decode('mbcs')
+
+    d.user32.OpenClipboard(0 if PY2 else None)
+
     d.user32.EmptyClipboard()
     hCd = d.kernel32.GlobalAlloc(GMEM_DDESHARE, len(text.encode('utf-16-le')) + 2)
     pchData = d.kernel32.GlobalLock(hCd)
@@ -57,7 +59,7 @@ def _copyWindows(text):
 def _pasteCygwin():
     CF_UNICODETEXT = 13
     d = ctypes.cdll
-    d.user32.OpenClipboard(None)
+    d.user32.OpenClipboard(0)
     handle = d.user32.GetClipboardData(CF_UNICODETEXT)
     data = ctypes.c_wchar_p(handle).value
     d.user32.CloseClipboard()
@@ -68,13 +70,9 @@ def _copyCygwin(text):
     GMEM_DDESHARE = 0x2000
     CF_UNICODETEXT = 13
     d = ctypes.cdll
-    try:  # Python 2
-        if not isinstance(text, unicode):
-            text = text.decode('mbcs')
-    except NameError:
-        if not isinstance(text, str):
-            text = text.decode('mbcs')
-    d.user32.OpenClipboard(None)
+    if not isinstance(text, text_type):
+        text = text.decode('mbcs')
+    d.user32.OpenClipboard(0)
     d.user32.EmptyClipboard()
     hCd = d.kernel32.GlobalAlloc(GMEM_DDESHARE, len(text.encode('utf-16-le')) + 2)
     pchData = d.kernel32.GlobalLock(hCd)
@@ -85,18 +83,12 @@ def _copyCygwin(text):
 
 
 def _copyOSX(text):
-    text = text.encode('utf-8')
-    p = Popen(['pbcopy', 'w'], stdin=PIPE)
-    try:
-        # works on Python 3 (bytes() requires an encoding)
-        p.communicate(input=bytes(text, 'utf-8'))
-    except TypeError:
-        # works on Python 2 (bytes() only takes one argument)
-        p.communicate(input=text)
+    p = Popen(['pbcopy', 'w'], stdin=PIPE, close_fds=True)
+    p.communicate(input=text.encode('utf-8'))
 
 
 def _pasteOSX():
-    p = Popen(['pbpaste', 'r'], stdout=PIPE)
+    p = Popen(['pbpaste', 'r'], stdout=PIPE, close_fds=True)
     stdout, stderr = p.communicate()
     return stdout.decode('utf-8')
 
@@ -107,7 +99,6 @@ def _pasteGtk():
 
 def _copyGtk(text):
     global cb
-    text = str(text)
     cb = gtk.Clipboard()
     cb.set_text(text)
     cb.store()
@@ -118,40 +109,29 @@ def _pasteQt():
 
 
 def _copyQt(text):
-    text = str(text)
     cb.setText(text)
 
 
 def _copyXclip(text):
-    p = Popen(['xclip', '-selection', 'c'], stdin=PIPE)
-    try:
-        # works on Python 3 (bytes() requires an encoding)
-        p.communicate(input=bytes(text, 'utf-8'))
-    except TypeError:
-        # works on Python 2 (bytes() only takes one argument)
-        p.communicate(input=bytes(text))
+    p = Popen(['xclip', '-selection', 'c'], stdin=PIPE, close_fds=True)
+    p.communicate(input=text.encode('utf-8'))
 
 
 def _pasteXclip():
-    p = Popen(['xclip', '-selection', 'c', '-o'], stdout=PIPE)
+    p = Popen(['xclip', '-selection', 'c', '-o'], stdout=PIPE, close_fds=True)
     stdout, stderr = p.communicate()
-    return bytes.decode(stdout)
+    return stdout.decode('utf-8')
 
 
 def _copyXsel(text):
-    p = Popen(['xsel', '-i'], stdin=PIPE)
-    try:
-        # works on Python 3 (bytes() requires an encoding)
-        p.communicate(input=bytes(text, 'utf-8'))
-    except TypeError:
-        # works on Python 2 (bytes() only takes one argument)
-        p.communicate(input=bytes(text))
+    p = Popen(['xsel', '-b', '-i'], stdin=PIPE, close_fds=True)
+    p.communicate(input=text.encode('utf-8'))
 
 
 def _pasteXsel():
-    p = Popen(['xsel', '-o'], stdout=PIPE)
+    p = Popen(['xsel', '-b', '-o'], stdout=PIPE, close_fds=True)
     stdout, stderr = p.communicate()
-    return bytes.decode(stdout)
+    return stdout.decode('utf-8')
 
 
 
